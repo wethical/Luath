@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ninja Lua Obfuscator | 忍者注入器兼容</title>
+<style>
+  :root {
+    --bg-deep: #0a0a0f;
+    --bg-panel: #12121a;
+    --bg-card: #1a1a26;
+    --bg-input: #0d0d14;
+    --border: #2a2a3e;
+    --border-hover: #3a3a55;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, 0.3);
+    --ninja-red: #e74c3c;
+    --text: #e0e0ec;
+    --text-dim: #8888a0;
+    --text-bright: #ffffff;
+    --green: #00d68f;
+    --yellow: #ffd633;
+    --radius: 8px;
+    --mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    --sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--sans); background: var(--bg-deep); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 20% 0%, rgba(108,92,231,.08), transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(231,76,60,.05), transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+  .topbar {
+    position: relative; z-index: 10; display: flex; align-items: center;
+    justify-content: space-between; padding: 14px 24px;
+    background: var(--bg-panel); border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--accent), #8b7ff0); border-radius: 8px;
+    font-size: 20px; box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .logo-text h1 { font-size: 16px; font-weight: 700; color: var(--text-bright); letter-spacing: .5px; }
+  .logo-text span { font-size: 11px; color: var(--text-dim); }
+  .topbar-actions { display: flex; gap: 10px; }
+  .topbar-btn {
+    padding: 8px 16px; background: transparent; border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text-dim); font-size: 12px;
+    cursor: pointer; transition: all .2s;
+  }
+  .topbar-btn:hover { border-color: var(--accent); color: var(--text-bright); background: rgba(108,92,231,.08); }
+  .main-container { display: flex; height: calc(100vh - 67px); position: relative; z-index: 1; }
+  .sidebar {
+    width: 290px; min-width: 290px; background: var(--bg-panel);
+    border-right: 1px solid var(--border); overflow-y: auto; padding: 18px;
+  }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .panel-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::before { content: ''; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 22px; }
+  .preset-btn {
+    padding: 9px 8px; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-size: 12px; cursor: pointer;
+    transition: all .2s; text-align: center;
+  }
+  .preset-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .preset-btn.active { background: rgba(108,92,231,.12); border-color: var(--accent); color: var(--text-bright); }
+  .opt-group { margin-bottom: 20px; }
+  .opt-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; cursor: pointer; user-select: none;
+  }
+  .opt-label { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+  .opt-label .opt-icon { width: 22px; text-align: center; font-size: 14px; opacity: .7; }
+  .toggle {
+    position: relative; width: 38px; height: 20px; background: var(--bg-input);
+    border-radius: 12px; border: 1px solid var(--border); cursor: pointer; transition: all .2s; flex-shrink: 0;
+  }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+    background: var(--text-dim); border-radius: 50%; transition: all .2s;
+  }
+  .toggle.on { background: rgba(108,92,231,.2); border-color: var(--accent); }
+  .toggle.on::after { left: 20px; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+  .slider-row { margin-bottom: 16px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .slider-header label { font-size: 12px; color: var(--text); }
+  .slider-value {
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    background: rgba(108,92,231,.1); padding: 2px 8px; border-radius: 4px; min-width: 36px; text-align: center;
+  }
+  input[type="range"] {
+    width: 100%; -webkit-appearance: none; height: 4px; background: var(--bg-input); border-radius: 2px; outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent);
+    border-radius: 50%; cursor: pointer; box-shadow: 0 0 6px var(--accent-glow);
+  }
+  .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .action-bar {
+    display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+    background: var(--bg-panel); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card);
+    color: var(--text); font-size: 13px; font-family: var(--sans); cursor: pointer; transition: all .2s; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--border-hover); background: var(--bg-input); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #8b7ff0); border-color: transparent;
+    color: white; font-weight: 600; box-shadow: 0 2px 12px var(--accent-glow);
+  }
+  .btn-primary:hover { box-shadow: 0 4px 20px var(--accent-glow); transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--border); box-shadow: none; }
+  .btn-danger { border-color: rgba(231,76,60,.3); color: var(--ninja-red); }
+  .btn-danger:hover { background: rgba(231,76,60,.08); }
+  .spacer { flex: 1; }
+  .stat-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  }
+  .stat-badge b { color: var(--text-bright); font-weight: 600; }
+  .stat-badge.warning { border-color: var(--yellow); }
+  .stat-badge.warning b { color: var(--yellow); }
+  .stat-badge.danger { border-color: var(--ninja-red); }
+  .stat-badge.danger b { color: var(--ninja-red); }
+  .size-progress { width: 80px; height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; margin-top: 3px; }
+  .size-progress-fill { height: 100%; border-radius: 2px; transition: width .3s, background .3s; }
+  .size-progress-fill.normal { background: var(--green); }
+  .size-progress-fill.warning { background: var(--yellow); }
+  .size-progress-fill.danger { background: var(--ninja-red); }
+  .editors { flex: 1; display: grid; grid-template-rows: 1fr 1fr; overflow: hidden; }
+  .editor-pane { display: flex; flex-direction: column; overflow: hidden; border-bottom: 1px solid var(--border); }
+  .editor-pane:last-child { border-bottom: none; }
+  .pane-header {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    background: var(--bg-panel); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .pane-title { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .pane-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .pane-actions { margin-left: auto; display: flex; gap: 6px; }
+  .pane-btn {
+    padding: 4px 10px; background: transparent; border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text-dim); font-size: 11px; cursor: pointer; transition: all .15s;
+  }
+  .pane-btn:hover { color: var(--text-bright); border-color: var(--accent); }
+  textarea.code-input {
+    flex: 1; width: 100%; background: var(--bg-input); color: var(--text); border: none; outline: none;
+    resize: none; padding: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.6; tab-size: 4; overflow: auto;
+  }
+  textarea.code-input::placeholder { color: var(--text-dim); opacity: .5; }
+  textarea.code-input::-webkit-scrollbar { width: 8px; height: 8px; }
+  textarea.code-input::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .output-pane textarea { background: #08080d; color: var(--green); }
+  .statusbar {
+    display: flex; align-items: center; gap: 16px; padding: 6px 18px;
+    background: var(--bg-panel); border-top: 1px solid var(--border); font-size: 11px;
+    color: var(--text-dim); font-family: var(--mono); flex-shrink: 0;
+  }
+  .status-item { display: flex; align-items: center; gap: 5px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .status-dot.busy { background: var(--yellow); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--ninja-red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    display: flex; align-items: center; gap: 10px; padding: 12px 20px; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.4); animation: toastIn .3s ease; max-width: 380px;
+  }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--ninja-red); }
+  .toast.info { border-left: 3px solid var(--accent); }
+  @keyframes toastIn { from{transform:translateX(100px);opacity:0} to{transform:translateX(0);opacity:1} }
+  .toast.hide { animation: toastOut .3s ease forwards; }
+  @keyframes toastOut { to{transform:translateX(100px);opacity:0} }
+  .progress-overlay {
+    display: none; position: fixed; top:0; left:0; right:0; bottom:0;
+    background: rgba(10,10,15,.8); z-index: 9998; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .progress-overlay.show { display: flex; }
+  .progress-box { text-align: center; }
+  .progress-spinner {
+    width: 48px; height: 48px; border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress-text { color: var(--text-dim); font-size: 13px; }
+  #fileInput { display: none; }
+  @media (max-width: 768px) {
+    .main-container { flex-direction: column; height: auto; }
+    .sidebar { width: 100%; min-width: 0; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+    .editor-area { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🥷</div>
+    <div class="logo-text">
+      <h1>Ninja Lua Obfuscator</h1>
+      <span>Roblox Lua 5.1 · 忍者注入器兼容 · 字节流编码</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="topbar-btn" onclick="loadExample()">📄 示例代码</button>
+    <button class="topbar-btn" onclick="document.getElementById('fileInput').click()">📁 上传文件</button>
+    <input type="file" id="fileInput" accept=".lua,.txt,.luac" onchange="handleFileUpload(event)">
+  </div>
+</div>
+
+<div class="main-container">
+  <div class="sidebar">
+    <div class="panel-title">混淆强度预设</div>
+    <div class="presets">
+      <button class="preset-btn active" data-preset="balanced">均衡模式</button>
+      <button class="preset-btn" data-preset="light">轻度混淆</button>
+      <button class="preset-btn" data-preset="aggressive">深度混淆</button>
+      <button class="preset-btn" data-preset="max">极限模式</button>
+    </div>
+    <div class="panel-title">混淆选项</div>
+    <div class="opt-group">
+      <div class="opt-item" data-opt="stringEncrypt">
+        <div class="opt-label"><span class="opt-icon">🔐</span>字符串加密</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="opt-item" data-opt="varRename">
+        <div class="opt-label"><span class="opt-icon">✏️</span>变量重命名</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="opt-item" data-opt="removeComments">
+        <div class="opt-label"><span class="opt-icon">💬</span>移除注释</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="opt-item" data-opt="numberObfusc">
+        <div class="opt-label"><span class="opt-icon">🔢</span>数字混淆</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="opt-item" data-opt="junkCode">
+        <div class="opt-label"><span class="opt-icon">🗑️</span>垃圾代码注入</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="opt-item" data-opt="minify">
+        <div class="opt-label"><span class="opt-icon">📦</span>代码压缩</div>
+        <div class="toggle on"></div>
+      </div>
+      <div class="opt-item" data-opt="loadstringWrap">
+        <div class="opt-label"><span class="opt-icon">🔄</span>字节流编码包装</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="controlFlow">
+        <div class="opt-label"><span class="opt-icon">🌀</span>控制流混淆</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="staticEnv">
+        <div class="opt-label"><span class="opt-icon">🛡️</span>静态环境</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="customVM">
+        <div class="opt-label"><span class="opt-icon">⚙️</span>自定义虚拟机</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="customBytecodeVM">
+        <div class="opt-label"><span class="opt-icon">🖥️</span>字节码虚拟机</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="advancedVM">
+        <div class="opt-label"><span class="opt-icon">⚡</span>高级虚拟机v3</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="stateMachineVM">
+        <div class="opt-label"><span class="opt-icon">🔄</span>状态机虚拟机</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="byteStream">
+        <div class="opt-label"><span class="opt-icon">🔗</span>字节流编码</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="dynamicLoading">
+        <div class="opt-label"><span class="opt-icon">🧬</span>动态加载</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="bit32Ops">
+        <div class="opt-label"><span class="opt-icon">🔢</span>bit32位运算</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="selfInvoke">
+        <div class="opt-label"><span class="opt-icon">🔄</span>自调用结构</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="moduleWrap">
+        <div class="opt-label"><span class="opt-icon">📦</span>模块化返回表</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="fakeByteStream">
+        <div class="opt-label"><span class="opt-icon">🎭</span>假字节流注入</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="flattenCode">
+        <div class="opt-label"><span class="opt-icon">📊</span>控制流扁平化</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="localEnv">
+        <div class="opt-label"><span class="opt-icon">🔒</span>局部环境隔离</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="functionSplit">
+        <div class="opt-label"><span class="opt-icon">🔧</span>函数拆分重组</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="returnFuncWrap">
+        <div class="opt-label"><span class="opt-icon">📦</span>返回函数包装</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="tableIndexJunk">
+        <div class="opt-label"><span class="opt-icon">🗃️</span>表索引垃圾代码</div>
+        <div class="toggle"></div>
+      </div>
+      <div style="margin:6px 0 2px;padding:0 4px;font-size:11px;color:var(--ninja-red);font-weight:600;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:8px;">安全防护套件</div>
+      <div class="opt-item" data-opt="antiDebug_tamper">
+        <div class="opt-label"><span class="opt-icon">🔒</span>反篡改校验</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_envCheck">
+        <div class="opt-label"><span class="opt-icon">🌐</span>环境检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_debugger">
+        <div class="opt-label"><span class="opt-icon">🐛</span>调试器检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_timeBomb">
+        <div class="opt-label"><span class="opt-icon">⏱️</span>时间炸弹</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_callStack">
+        <div class="opt-label"><span class="opt-icon">📚</span>调用栈检查</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_gcManip">
+        <div class="opt-label"><span class="opt-icon">♻️</span>GC操纵检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_hookChain">
+        <div class="opt-label"><span class="opt-icon">🔗</span>Hook链检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_memScan">
+        <div class="opt-label"><span class="opt-icon">🔍</span>内存扫描检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_freqCheck">
+        <div class="opt-label"><span class="opt-icon">📡</span>CPU频率校准</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_coroProbe">
+        <div class="opt-label"><span class="opt-icon">🧵</span>协程探针检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_strMeta">
+        <div class="opt-label"><span class="opt-icon">📝</span>字符串元方法篡改</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_bpTrap">
+        <div class="opt-label"><span class="opt-icon">💥</span>断点陷阱</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_localProbe">
+        <div class="opt-label"><span class="opt-icon">🔎</span>局部变量探测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_funcHash">
+        <div class="opt-label"><span class="opt-icon">🔐</span>函数哈希守卫</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_traceTrap">
+        <div class="opt-label"><span class="opt-icon">📐</span>多轮时间追踪</div>
+        <div class="toggle"></div>
+      </div>
+      <div style="margin:4px 0 2px;padding:0 4px;font-size:11px;color:var(--ninja-red);font-weight:600;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:6px;">增强反调试</div>
+      <div class="opt-item" data-opt="antiDebug_sethookTrap">
+        <div class="opt-label"><span class="opt-icon">🪝</span>sethook拦截陷阱</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_registryGuard">
+        <div class="opt-label"><span class="opt-icon">🗂️</span>注册表篡改检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_rawMetaCheck">
+        <div class="opt-label"><span class="opt-icon">⚖️</span>raw元方法检测</div>
+        <div class="toggle"></div>
+      </div>
+      <div style="margin:4px 0 2px;padding:0 4px;font-size:11px;color:var(--ninja-red);font-weight:600;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:6px;">反逆向 & 反静态</div>
+      <div class="opt-item" data-opt="antiDebug_strWatermark">
+        <div class="opt-label"><span class="opt-icon">💧</span>控制流字符串水印</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_opaquePred">
+        <div class="opt-label"><span class="opt-icon">🌫️</span>不透明谓词链</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_decoyFunc">
+        <div class="opt-label"><span class="opt-icon">🧩</span>诱饵函数陷阱</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiDebug_metaTrap">
+        <div class="opt-label"><span class="opt-icon">🕳️</span>元表__index陷阱</div>
+        <div class="toggle"></div>
+      </div>
+      <div style="margin:6px 0 2px;padding:0 4px;font-size:11px;color:var(--accent);font-weight:600;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:8px;">反逆向套件</div>
+      <div class="opt-item" data-opt="antiRev_stringFog">
+        <div class="opt-label"><span class="opt-icon">🌫️</span>字符串雾化</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_controlFlowSpaghetti">
+        <div class="opt-label"><span class="opt-icon">🍝</span>控制流面条化</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_deadCodeInjection">
+        <div class="opt-label"><span class="opt-icon">💀</span>死代码注入</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_varIndirection">
+        <div class="opt-label"><span class="opt-icon">🔀</span>变量间接寻址</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_opaqueExpr">
+        <div class="opt-label"><span class="opt-icon">🔮</span>不透明表达式</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_antiDecompile">
+        <div class="opt-label"><span class="opt-icon">🚫</span>反反编译</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_selfModifying">
+        <div class="opt-label"><span class="opt-icon">🔄</span>自修改代码</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="antiRev_metaObfuscation">
+        <div class="opt-label"><span class="opt-icon">🎭</span>元表混淆</div>
+        <div class="toggle"></div>
+      </div>
+      <div class="opt-item" data-opt="customBase64Table">
+        <div class="opt-label"><span class="opt-icon">🔑</span>隐藏Base64编码表</div>
+        <div class="toggle"></div>
+      </div>
+    </div>
+    <div class="panel-title">参数调节</div>
+    <div class="slider-row">
+      <div class="slider-header"><label>变量名长度</label><span class="slider-value" id="varLenVal">12</span></div>
+      <input type="range" id="varLenSlider" min="8" max="30" value="12">
+    </div>
+    <div class="slider-row">
+      <div class="slider-header"><label>垃圾代码密度</label><span class="slider-value" id="junkDensityVal">5</span></div>
+      <input type="range" id="junkDensitySlider" min="1" max="20" value="5">
+    </div>
+    <div class="slider-row">
+      <div class="slider-header"><label>字符串加密强度</label><span class="slider-value" id="strEncStrengthVal">2</span></div>
+      <input type="range" id="strEncStrengthSlider" min="1" max="4" value="2">
+    </div>
+    <div class="slider-row">
+      <div class="slider-header"><label>变量名风格</label><span class="slider-value" id="varStyleVal">长名</span></div>
+      <select id="varStyleSelect" style="width:100%;padding:4px 8px;background:var(--bg-input);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:12px;">
+        <option value="long">长名 (lIl1o0O)</option>
+        <option value="short">短名 (Vx/JO/eW)</option>
+        <option value="hex">十六进制 (_0x1f)</option>
+        <option value="mixed">混合模式</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="editor-area">
+    <div class="action-bar">
+      <button class="btn btn-primary" id="obfuscateBtn" onclick="doObfuscate()">⚡ 执行混淆</button>
+      <button class="btn" onclick="loadExample()">示例</button>
+      <button class="btn btn-danger" onclick="clearAll()">清空</button>
+      <div class="spacer"></div>
+      <div class="stat-badge">输入: <b id="inputSize">0 B</b></div>
+      <div class="stat-badge" id="outputSizeBadge">输出: <b id="outputSize">0 B</b> / 1M
+        <div class="size-progress"><div class="size-progress-fill normal" id="sizeProgressFill" style="width:0%"></div></div>
+      </div>
+      <div class="stat-badge">耗时: <b id="timeCost">0</b> ms</div>
+    </div>
+    <div class="editors">
+      <div class="editor-pane input-pane">
+        <div class="pane-header">
+          <div class="pane-dot"></div>
+          <div class="pane-title">源代码输入 (Lua)</div>
+          <div class="pane-actions"><button class="pane-btn" onclick="pasteClipboard()">粘贴</button></div>
+        </div>
+        <textarea class="code-input" id="inputCode" spellcheck="false"
+          placeholder="-- 在此粘贴你的 Roblox Lua 5.1 代码&#10;-- 支持 script, game, workspace, getgenv 等注入器 API&#10;&#10;print('Hello Ninja!')"></textarea>
+      </div>
+      <div class="editor-pane output-pane">
+        <div class="pane-header">
+          <div class="pane-dot" style="background: var(--accent);"></div>
+          <div class="pane-title">混淆后输出</div>
+          <div class="pane-actions">
+            <button class="pane-btn" onclick="copyOutput()">复制全部</button>
+            <button class="pane-btn" onclick="downloadOutput()">下载 .lua</button>
+          </div>
+        </div>
+        <textarea class="code-input" id="outputCode" spellcheck="false" readonly
+          placeholder="-- 混淆结果将显示在此处..."></textarea>
+      </div>
+    </div>
+    <div class="statusbar">
+      <div class="status-item"><div class="status-dot" id="statusDot"></div><span id="statusText">就绪</span></div>
+      <div class="status-item">Lua 5.1</div>
+      <div class="status-item">注入器: <span style="color: var(--accent)">Ninja</span></div>
+      <div class="spacer"></div>
+      <div class="status-item" id="lastAction">未操作</div>
+    </div>
+  </div>
+</div>
+
+<div class="progress-overlay" id="progressOverlay">
+  <div class="progress-box">
+    <div class="progress-spinner"></div>
+    <div class="progress-text">正在执行混淆...</div>
+  </div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+"use strict";
+
+// ============================================================
+//  Ninja Lua Obfuscator - 前端界面
+//  混淆引擎已迁移至后端（server/obfuscator.js）
+//  本页面仅负责 UI 交互与参数收集，通过 /api/obfuscate 调用后端
+// ============================================================
+
+// 输出大小上限：1MB（与后端一致）
+const MAX_OUTPUT_SIZE = 1048576;
+
+// 格式化字节数为可读字符串
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(2) + ' MB';
+}
+
+const appConfig = {
+    stringEncrypt: true, varRename: true, removeComments: true,
+    numberObfusc: true, junkCode: true, minify: true,
+    loadstringWrap: false, controlFlow: false,
+    staticEnv: false, customVM: false, byteStream: false, customBytecodeVM: false, advancedVM: false, stateMachineVM: false,
+    varNameLength: 12, junkDensity: 5, strEncStrength: 2,
+    varNameStyle: 'long', // 'long' = Il1o0O 风格, 'short' = Vx/JO/eW 风格, 'hex' = _0x1f, 'mixed' = 混合
+    dynamicLoading: false,
+    bit32Ops: false,     // 注入 bit32 位运算（bxor/rrotate/bnot 等）
+    selfInvoke: false,    // 自调用结构包装（:C()(...) 变体自执行）
+    moduleWrap: false,    // 模块化返回表包装（return ({...}) 结构）
+    fakeByteStream: false, // 假字节流编码代码注入（诱饵解码逻辑，干扰逆向分析）
+    flattenCode: false,    // 语句级控制流扁平化（将原始代码拆分为状态机）
+    localEnv: false,       // 局部环境包装（全局函数本地化 + return(function()...end)() ）
+    functionSplit: false,  // 函数拆分与重组（大函数拆分为内部小函数+闭包调用）
+    returnFuncWrap: false, // return function(...) ... end 包装（输出可调用函数）
+    // 安全防护套件
+    antiDebug_tamper: false,    // 反篡改校验
+    antiDebug_envCheck: false,  // 环境检测
+    antiDebug_debugger: false,  // 调试器检测
+    antiDebug_timeBomb: false,  // 时间炸弹
+    antiDebug_callStack: false, // 调用栈检查
+    antiDebug_gcManip: false,   // GC 操纵检测
+    antiDebug_hookChain: false, // Hook 链检测
+    antiDebug_memScan: false,   // 内存扫描检测
+    antiDebug_freqCheck: false, // CPU 频率校准
+    antiDebug_coroProbe: false, // 协程探针检测
+    antiDebug_strMeta: false,   // 字符串元方法篡改
+    antiDebug_bpTrap: false,    // 断点陷阱
+    antiDebug_localProbe: false,// 局部变量探测
+    antiDebug_funcHash: false,  // 函数哈希守卫
+    antiDebug_traceTrap: false, // 多轮时间追踪陷阱
+    // 增强 — 反调试
+    antiDebug_sethookTrap: false,  // sethook 拦截陷阱
+    antiDebug_registryGuard: false,// debug.getregistry 篡改检测
+    antiDebug_rawMetaCheck: false, // rawequal/rawlen 元方法检测
+    // 增强 — 反逆向
+    antiDebug_strWatermark: false, // 控制流字符串水印
+    antiDebug_opaquePred: false,   // 不透明谓词链
+    antiDebug_decoyFunc: false,    // 诱饵函数陷阱
+    antiDebug_metaTrap: false,     // 元表 __index 陷阱
+    tableIndexJunk: false,         // 表索引垃圾代码（b.D[0xNN] 十六进制索引 + 复杂条件）
+    // 反逆向套件
+    antiRev_stringFog: false,      // 字符串雾化（运行时动态拼接/解码，隐藏字符串特征）
+    antiRev_controlFlowSpaghetti: false, // 控制流面条化（随机跳转+虚假分支，打乱执行流）
+    antiRev_deadCodeInjection: false,    // 死代码注入（永不可达的代码块，干扰反编译器）
+    antiRev_varIndirection: false,       // 变量间接寻址（通过表索引访问变量，隐藏数据流）
+    antiRev_opaqueExpr: false,           // 不透明表达式（用复杂运算替代简单常量/布尔值）
+    antiRev_antiDecompile: false,        // 反反编译（注入导致反编译器崩溃/超时的结构）
+    antiRev_selfModifying: false,        // 自修改代码（运行时动态生成并执行代码）
+    antiRev_metaObfuscation: false,      // 元表混淆（用 __index/__newindex 隐藏逻辑）
+    customBase64Table: false,        // 隐藏自定义 Base64 编码表（打乱字母表+运行时加密重建）
+};
+
+// ============================================================
+//  UI 交互
+// ============================================================
+const UI = {
+  init() {
+    document.querySelectorAll('.opt-item').forEach(item => {
+      const opt = item.dataset.opt;
+      const toggle = item.querySelector('.toggle');
+      appConfig[opt] = toggle.classList.contains('on');
+      item.addEventListener('click', () => {
+        toggle.classList.toggle('on');
+        appConfig[opt] = toggle.classList.contains('on');
+        this.setActivePreset(null);
+      });
+    });
+    this.bindSlider('varLenSlider', 'varLenVal', 'varNameLength');
+    this.bindSlider('junkDensitySlider', 'junkDensityVal', 'junkDensity');
+    this.bindSlider('strEncStrengthSlider', 'strEncStrengthVal', 'strEncStrength');
+
+    const varStyleSel = document.getElementById('varStyleSelect');
+    if (varStyleSel) {
+      varStyleSel.addEventListener('change', () => {
+        const v = varStyleSel.value;
+        appConfig.varNameStyle = v;
+        document.getElementById('varStyleVal').textContent = ({long:'长名',short:'短名',hex:'十六进制',mixed:'混合'}[v] || '长名');
+        this.setActivePreset(null);
+      });
+    }
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.applyPreset(btn.dataset.preset);
+        this.setActivePreset(btn.dataset.preset);
+      });
+    });
+
+    const inputEl = document.getElementById('inputCode');
+    inputEl.addEventListener('input', () => {
+      document.getElementById('inputSize').textContent = formatBytes(inputEl.value.length);
+    });
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = inputEl.selectionStart, end = inputEl.selectionEnd;
+        inputEl.value = inputEl.value.substring(0, s) + '    ' + inputEl.value.substring(end);
+        inputEl.selectionStart = inputEl.selectionEnd = s + 4;
+      }
+    });
+  },
+
+  bindSlider(sliderId, valueId, configKey) {
+    const slider = document.getElementById(sliderId);
+    const display = document.getElementById(valueId);
+    if (!slider || !display) return;
+    slider.addEventListener('input', () => {
+      const val = parseInt(slider.value);
+      appConfig[configKey] = val;
+      display.textContent = val;
+    });
+  },
+
+  setActivePreset(name) {
+    document.querySelectorAll('.preset-btn').forEach(b => {
+      b.classList.toggle('active', name !== null && b.dataset.preset === name);
+    });
+  },
+
+  presets: {
+    light: { stringEncrypt:true, varRename:true, removeComments:true, numberObfusc:false, junkCode:false, minify:true, loadstringWrap:false, controlFlow:false, staticEnv:false, customVM:false, byteStream:false, customBytecodeVM:false, advancedVM:false, stateMachineVM:false, varNameLength:8, junkDensity:2, strEncStrength:1, varNameStyle:'long', dynamicLoading:false, bit32Ops:false, selfInvoke:false, moduleWrap:false, fakeByteStream:false, flattenCode:false, localEnv:false, functionSplit:false, returnFuncWrap:false, tableIndexJunk:false, antiDebug_tamper:false, antiDebug_envCheck:false, antiDebug_debugger:false, antiDebug_timeBomb:false, antiDebug_callStack:false, antiDebug_gcManip:false, antiDebug_hookChain:false, antiDebug_memScan:false, antiDebug_freqCheck:false, antiDebug_coroProbe:false, antiDebug_strMeta:false, antiDebug_bpTrap:false, antiDebug_localProbe:false, antiDebug_funcHash:false, antiDebug_traceTrap:false, antiDebug_sethookTrap:false, antiDebug_registryGuard:false, antiDebug_rawMetaCheck:false, antiDebug_strWatermark:false, antiDebug_opaquePred:false, antiDebug_decoyFunc:false, antiDebug_metaTrap:false, antiRev_stringFog:false, antiRev_controlFlowSpaghetti:false, antiRev_deadCodeInjection:false, antiRev_varIndirection:false, antiRev_opaqueExpr:false, antiRev_antiDecompile:false, antiRev_selfModifying:false, antiRev_metaObfuscation:false, customBase64Table:false },
+    balanced: { stringEncrypt:true, varRename:true, removeComments:true, numberObfusc:true, junkCode:true, minify:true, loadstringWrap:false, controlFlow:false, staticEnv:false, customVM:false, byteStream:false, customBytecodeVM:false, advancedVM:false, stateMachineVM:false, varNameLength:12, junkDensity:5, strEncStrength:2, varNameStyle:'long', dynamicLoading:false, bit32Ops:false, selfInvoke:false, moduleWrap:false, fakeByteStream:false, flattenCode:false, localEnv:false, functionSplit:false, returnFuncWrap:false, tableIndexJunk:false, antiDebug_tamper:false, antiDebug_envCheck:false, antiDebug_debugger:false, antiDebug_timeBomb:false, antiDebug_callStack:false, antiDebug_gcManip:false, antiDebug_hookChain:false, antiDebug_memScan:false, antiDebug_freqCheck:false, antiDebug_coroProbe:false, antiDebug_strMeta:false, antiDebug_bpTrap:false, antiDebug_localProbe:false, antiDebug_funcHash:false, antiDebug_traceTrap:false, antiDebug_sethookTrap:false, antiDebug_registryGuard:false, antiDebug_rawMetaCheck:false, antiDebug_strWatermark:false, antiDebug_opaquePred:false, antiDebug_decoyFunc:false, antiDebug_metaTrap:false, antiRev_stringFog:false, antiRev_controlFlowSpaghetti:false, antiRev_deadCodeInjection:false, antiRev_varIndirection:false, antiRev_opaqueExpr:false, antiRev_antiDecompile:false, antiRev_selfModifying:false, antiRev_metaObfuscation:false, customBase64Table:false },
+    aggressive: { stringEncrypt:true, varRename:true, removeComments:true, numberObfusc:true, junkCode:true, minify:true, loadstringWrap:false, controlFlow:true, staticEnv:true, customVM:false, byteStream:true, customBytecodeVM:true, advancedVM:false, stateMachineVM:false, varNameLength:18, junkDensity:10, strEncStrength:3, varNameStyle:'short', dynamicLoading:false, bit32Ops:true, selfInvoke:false, moduleWrap:false, fakeByteStream:true, flattenCode:true, localEnv:true, functionSplit:true, returnFuncWrap:false, tableIndexJunk:true, antiDebug_tamper:false, antiDebug_envCheck:true, antiDebug_debugger:false, antiDebug_timeBomb:false, antiDebug_callStack:true, antiDebug_gcManip:true, antiDebug_hookChain:false, antiDebug_memScan:false, antiDebug_freqCheck:true, antiDebug_coroProbe:false, antiDebug_strMeta:true, antiDebug_bpTrap:false, antiDebug_localProbe:false, antiDebug_funcHash:true, antiDebug_traceTrap:false, antiDebug_sethookTrap:true, antiDebug_registryGuard:false, antiDebug_rawMetaCheck:true, antiDebug_strWatermark:true, antiDebug_opaquePred:true, antiDebug_decoyFunc:false, antiDebug_metaTrap:false, antiRev_stringFog:true, antiRev_controlFlowSpaghetti:false, antiRev_deadCodeInjection:true, antiRev_varIndirection:false, antiRev_opaqueExpr:true, antiRev_antiDecompile:false, antiRev_selfModifying:false, antiRev_metaObfuscation:false, customBase64Table:true },
+    max: { stringEncrypt:true, varRename:true, removeComments:true, numberObfusc:true, junkCode:true, minify:true, loadstringWrap:false, controlFlow:true, staticEnv:true, customVM:true, byteStream:true, customBytecodeVM:true, advancedVM:true, stateMachineVM:true, varNameLength:24, junkDensity:18, strEncStrength:4, varNameStyle:'short', dynamicLoading:true, bit32Ops:true, selfInvoke:true, moduleWrap:true, fakeByteStream:true, flattenCode:true, localEnv:true, functionSplit:true, returnFuncWrap:true, tableIndexJunk:true, antiDebug_tamper:true, antiDebug_envCheck:true, antiDebug_debugger:true, antiDebug_timeBomb:true, antiDebug_callStack:true, antiDebug_gcManip:true, antiDebug_hookChain:true, antiDebug_memScan:true, antiDebug_freqCheck:true, antiDebug_coroProbe:true, antiDebug_strMeta:true, antiDebug_bpTrap:true, antiDebug_localProbe:true, antiDebug_funcHash:true, antiDebug_traceTrap:true, antiDebug_sethookTrap:true, antiDebug_registryGuard:true, antiDebug_rawMetaCheck:true, antiDebug_strWatermark:true, antiDebug_opaquePred:true, antiDebug_decoyFunc:true, antiDebug_metaTrap:true, antiRev_stringFog:true, antiRev_controlFlowSpaghetti:true, antiRev_deadCodeInjection:true, antiRev_varIndirection:true, antiRev_opaqueExpr:true, antiRev_antiDecompile:true, antiRev_selfModifying:true, antiRev_metaObfuscation:true, customBase64Table:true },
+  },
+
+  applyPreset(name) {
+    const p = this.presets[name];
+    if (!p) return;
+    for (const [key, val] of Object.entries(p)) {
+      appConfig[key] = val;
+      const item = document.querySelector('.opt-item[data-opt="' + key + '"]');
+      if (item) {
+        const toggle = item.querySelector('.toggle');
+        toggle.classList.toggle('on', val);
+      }
+    }
+    document.getElementById('varLenSlider').value = p.varNameLength;
+    document.getElementById('varLenVal').textContent = p.varNameLength;
+    document.getElementById('junkDensitySlider').value = p.junkDensity;
+    document.getElementById('junkDensityVal').textContent = p.junkDensity;
+    document.getElementById('strEncStrengthSlider').value = p.strEncStrength;
+    document.getElementById('strEncStrengthVal').textContent = p.strEncStrength;
+    var _vs = p.varNameStyle || 'long';
+    var _vsEl = document.getElementById('varStyleSelect');
+    var _vsVal = document.getElementById('varStyleVal');
+    if (_vsEl) _vsEl.value = _vs;
+    if (_vsVal) _vsVal.textContent = ({long:'长名',short:'短名',hex:'十六进制',mixed:'混合'}[_vs] || '长名');
+  },
+
+  setStatus(text, type) {
+    const dot = document.getElementById('statusDot');
+    document.getElementById('statusText').textContent = text;
+    dot.className = 'status-dot' + (type === 'busy' ? ' busy' : type === 'error' ? ' error' : '');
+  },
+
+  toast(message, type) {
+    type = type || 'info';
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+    toast.innerHTML = '<span>' + icon + '</span><span>' + message + '</span>';
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('hide');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  },
+
+  showProgress(show) {
+    document.getElementById('progressOverlay').classList.toggle('show', show);
+  },
+};
+
+// ============================================================
+//  全局操作函数
+// ============================================================
+async function doObfuscate() {
+  const input = document.getElementById('inputCode').value;
+  const outputEl = document.getElementById('outputCode');
+  const obfBtn = document.getElementById('obfuscateBtn');
+  if (!input.trim()) { UI.toast('请先输入源代码', 'error'); return; }
+
+  UI.showProgress(true);
+  UI.setStatus('正在请求后端混淆...', 'busy');
+  obfBtn.disabled = true;
+
+  try {
+    let resp;
+    try {
+      resp = await fetch('/api/obfuscate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: input, config: appConfig })
+      });
+    } catch (netErr) {
+      throw new Error('无法连接后端服务，请确认 server.js 已启动');
+    }
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+
+    outputEl.value = data.code;
+
+    // 更新输出大小显示
+    updateOutputSize(data.code.length);
+
+    document.getElementById('timeCost').textContent = data.elapsed;
+    document.getElementById('lastAction').textContent = '混淆完成 ' + new Date().toLocaleTimeString();
+    UI.setStatus('混淆完成', 'ready');
+
+    if (data.overLimit) {
+      UI.toast('输出 ' + formatBytes(data.code.length) + ' 已超过 1M 上限！请减少混淆强度或源码体积', 'error');
+    } else if (data.nearLimit) {
+      UI.toast('输出 ' + formatBytes(data.code.length) + ' 已接近 1M 上限，建议降低混淆强度', 'info');
+    } else {
+      UI.toast('混淆成功完成！', 'success');
+    }
+  } catch (e) {
+    console.error(e);
+    UI.setStatus('混淆失败', 'error');
+    UI.toast('混淆失败: ' + e.message, 'error');
+  } finally {
+    UI.showProgress(false);
+    obfBtn.disabled = false;
+  }
+}
+
+// 更新输出大小徽章状态
+function updateOutputSize(size) {
+  const badge = document.getElementById('outputSizeBadge');
+  const sizeText = document.getElementById('outputSize');
+  const fill = document.getElementById('sizeProgressFill');
+  const ratio = size / MAX_OUTPUT_SIZE;
+
+  sizeText.textContent = formatBytes(size);
+
+  // 移除旧状态 class
+  badge.classList.remove('warning', 'danger');
+  fill.classList.remove('normal', 'warning', 'danger');
+
+  if (ratio >= 1) {
+    badge.classList.add('danger');
+    fill.classList.add('danger');
+    fill.style.width = '100%';
+  } else if (ratio >= 0.8) {
+    badge.classList.add('warning');
+    fill.classList.add('warning');
+    fill.style.width = (ratio * 100) + '%';
+  } else {
+    fill.classList.add('normal');
+    fill.style.width = (ratio * 100) + '%';
+  }
+}
+
+function loadExample() {
+  const example = [
+    '-- Roblox Ninja Script Example',
+    '-- 兼容忍者注入器 API',
+    '',
+    'local Players = game:GetService("Players")',
+    'local LocalPlayer = Players.LocalPlayer',
+    '',
+    'local Config = {',
+    '    Enabled = true,',
+    '    Speed = 50,',
+    '    JumpPower = 120,',
+    '    NotifyText = "Ninja Script Loaded!"',
+    '}',
+    '',
+    'local function notify(title, text)',
+    '    print("[" .. title .. "] " .. text)',
+    '    if syn and syn.toast_notification then',
+    '        syn.toast_notification({',
+    '            title = title,',
+    '            content = text,',
+    '            duration = 5',
+    '        })',
+    '    end',
+    'end',
+    '',
+    'local function setSpeed(speed)',
+    '    local char = LocalPlayer.Character',
+    '    if char and char:FindFirstChild("Humanoid") then',
+    '        char.Humanoid.WalkSpeed = speed',
+    '        notify("Speed", "WalkSpeed set to " .. tostring(speed))',
+    '    end',
+    'end',
+    '',
+    'local function setJump(power)',
+    '    local char = LocalPlayer.Character',
+    '    if char and char:FindFirstChild("Humanoid") then',
+    '        char.Humanoid.UseJumpPower = true',
+    '        char.Humanoid.JumpPower = power',
+    '        notify("Jump", "JumpPower set to " .. tostring(power))',
+    '    end',
+    'end',
+    '',
+    'local function main()',
+    '    if not Config.Enabled then',
+    '        notify("Ninja", "Script is disabled")',
+    '        return',
+    '    end',
+    '    notify("Ninja", Config.NotifyText)',
+    '    setSpeed(Config.Speed)',
+    '    setJump(Config.JumpPower)',
+    '    LocalPlayer.CharacterAdded:Connect(function()',
+    '        wait(1)',
+    '        setSpeed(Config.Speed)',
+    '        setJump(Config.JumpPower)',
+    '        notify("Ninja", "Character respawned, re-applied!")',
+    '    end)',
+    'end',
+    '',
+    'main()',
+  ].join('\n');
+  document.getElementById('inputCode').value = example;
+  document.getElementById('inputSize').textContent = formatBytes(example.length);
+  UI.toast('示例代码已加载', 'info');
+}
+
+function clearAll() {
+  document.getElementById('inputCode').value = '';
+  document.getElementById('outputCode').value = '';
+  document.getElementById('inputSize').textContent = '0 B';
+  updateOutputSize(0);
+  document.getElementById('timeCost').textContent = '0';
+  document.getElementById('lastAction').textContent = '已清空';
+  UI.toast('已清空', 'info');
+}
+
+function copyOutput() {
+  const output = document.getElementById('outputCode');
+  if (!output.value) { UI.toast('输出为空', 'error'); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(output.value).then(function() {
+      UI.toast('已复制到剪贴板', 'success');
+    }).catch(function() {
+      output.select();
+      document.execCommand('copy');
+      UI.toast('已复制到剪贴板', 'success');
+    });
+  } else {
+    output.select();
+    document.execCommand('copy');
+    UI.toast('已复制到剪贴板', 'success');
+  }
+}
+
+function downloadOutput() {
+  const output = document.getElementById('outputCode');
+  if (!output.value) { UI.toast('输出为空', 'error'); return; }
+  const blob = new Blob([output.value], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ninja_obfuscated.lua';
+  a.click();
+  URL.revokeObjectURL(url);
+  UI.toast('文件已下载', 'success');
+}
+
+async function pasteClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      document.getElementById('inputCode').value = text;
+      document.getElementById('inputSize').textContent = formatBytes(text.length);
+      UI.toast('已粘贴', 'success');
+    }
+  } catch (e) {
+    UI.toast('请手动粘贴 (Ctrl+V)', 'info');
+  }
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('inputCode').value = e.target.result;
+    document.getElementById('inputSize').textContent = formatBytes(e.target.result.length);
+    UI.toast('已加载: ' + file.name, 'success');
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// Config persistence
+UI.saveConfig = function() {
+  try {
+    localStorage.setItem('ninja_obf_config', JSON.stringify(appConfig));
+  } catch(e) {}
+};
+
+UI.loadConfig = function() {
+  try {
+    const saved = localStorage.getItem('ninja_obf_config');
+    if (saved) {
+      const cfg = JSON.parse(saved);
+      for (const [key, val] of Object.entries(cfg)) {
+        appConfig[key] = val;
+        const item = document.querySelector('.opt-item[data-opt="' + key + '"]');
+        if (item) {
+          const toggle = item.querySelector('.toggle');
+          toggle.classList.toggle('on', val);
+        }
+      }
+      document.getElementById('varLenSlider').value = cfg.varNameLength || 12;
+      document.getElementById('varLenVal').textContent = cfg.varNameLength || 12;
+      document.getElementById('junkDensitySlider').value = cfg.junkDensity || 5;
+      document.getElementById('junkDensityVal').textContent = cfg.junkDensity || 5;
+      document.getElementById('strEncStrengthSlider').value = cfg.strEncStrength || 2;
+      document.getElementById('strEncStrengthVal').textContent = cfg.strEncStrength || 2;
+      if (cfg.varNameStyle) {
+        document.getElementById('varStyleSelect').value = cfg.varNameStyle;
+        document.getElementById('varStyleVal').textContent = ({long:'长名',short:'短名',hex:'十六进制',mixed:'混合'}[cfg.varNameStyle] || '长名');
+      }
+      UI.setActivePreset(null);
+    }
+  } catch(e) {}
+};
+
+// 包装选项现已支持全部同时启用，无需互斥
+
+// Patch the toggle handler to add save
+(function() {
+  var origInit = UI.init;
+  UI.init = function() {
+    origInit.call(this);
+    // Add save on toggle
+    document.querySelectorAll('.opt-item').forEach(item => {
+      const opt = item.dataset.opt;
+      item.addEventListener('click', () => {
+        UI.saveConfig();
+      });
+    });
+    // Load saved config
+    this.loadConfig();
+    // Save on slider change
+    ['varLenSlider', 'junkDensitySlider', 'strEncStrengthSlider'].forEach(id => {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('change', function() { UI.saveConfig(); });
+    });
+  };
+})();
+
+// 确保 DOM 完全就绪后再初始化 UI，兼容所有浏览器加载时序
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { UI.init(); });
+} else {
+  UI.init();
+}
+</script>
+</body>
+</html>

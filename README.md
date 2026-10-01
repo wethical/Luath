@@ -1,198 +1,91 @@
-<div align="center">
+# Ninja Lua Obfuscator（前后端分离版）
 
-<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&height=180&color=gradient&text=Luath&fontAlign=50&fontAlignY=35&fontSize=42&desc=Lua%20Obfuscator%20%E2%80%A2%20AST%20Transformations%20%E2%80%A2%20Control%20Flow%20Obfuscation&descAlign=50&descAlignY=60" />
+Roblox Lua 5.1 / Luau 代码混淆器。原为单文件 HTML，现拆分为 **Node.js 后端（混淆引擎）** 与 **静态前端（页面交互）** 两部分，支持忍者注入器兼容输出。
 
-<a href="https://github.com/luath-lua/Luath">
-  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=24&duration=2500&pause=900&center=true&vCenter=true&width=760&lines=Pure+Lua+Obfuscation;AST+Transforms+%E2%80%A2+Encryption+%E2%80%A2+Anti-Tamper;Lua+5.1+and+LuaU+support;Built+for+code+protection" alt="Typing SVG" />
-</a>
+## 项目结构
 
-<br/>
+```
+ninja-obfuscator-app/
+├── package.json          # 项目声明与启动脚本
+├── README.md
+├── server/               # 后端
+│   ├── server.js         # HTTP 服务：混淆 API + 静态托管前端
+│   └── obfuscator.js     # 混淆引擎（从原 HTML 迁移，无浏览器依赖）
+└── public/               # 前端
+    └── index.html        # 页面 UI + 交互（通过 /api/obfuscate 调用后端）
+```
 
-<a href="https://luath-lua.github.io/Luath/">
-  <img src="https://img.shields.io/badge/Playground-Try%20Out-0F766E?style=for-the-badge&logo=github&logoColor=white" alt="Open Luath Playground" />
-</a>
-<a href="https://github.com/luath-lua/Luath/actions/workflows/Test.yml">
-  <img src="https://img.shields.io/github/actions/workflow/status/luath-lua/Luath/Test.yml?branch=master&style=for-the-badge&label=Tests" alt="Tests" />
-</a>
-<a href="https://github.com/luath-lua/Luath/stargazers">
-  <img src="https://img.shields.io/github/stars/luath-lua/Luath?style=for-the-badge&logo=github&label=Stars" alt="GitHub stars" />
-</a>
-<a href="https://discord.gg/U8h4d4Rf64">
-  <img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord server" />
-</a>
+## 快速启动
 
-</div>
-
----
-
-<p align="center">
-  <img src="assets/readme/obfuscation-preview.gif" alt="Luath obfuscation process preview" width="900" />
-</p>
-
-**Luath** is a Lua obfuscator written in pure Lua. It is a reworked, rebranded
-fork of [Prometheus](https://github.com/prometheus-lua/Prometheus) by Elias
-Oelschner, distributed under the original Prometheus license terms (see
-[LICENSE](LICENSE)).
-
-It applies a range of **AST-based transformations** to make source code significantly harder to read, analyze, and reverse engineer.  
-These include techniques such as **control-flow flattening**, **constant encryption**, and other Lua-specific obfuscation strategies.
-
-The project was inspired by the excellent [javascript-obfuscator](https://github.com/javascript-obfuscator/javascript-obfuscator).
-
-Currently, Luath supports:
-
-- **Lua 5.1**
-- **LuaU** *(basic support is available, but still not fully finished)*
-
----
-
-
-## Quick Start
-
-Try the browser version first:
-
-
-<a href="https://luath-lua.github.io/Luath/">
-  <img src="https://img.shields.io/badge/Playground-Try%20Out-0F766E?style=for-the-badge&logo=github&logoColor=white" alt="Open Luath Playground" />
-</a>
-
-### Install CLI (Linux/macOS)
-
-Install latest release with one command:
+要求 Node.js 18+。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/luath-lua/Luath/master/install.sh | sh
+npm start
+# 或
+node server/server.js
 ```
 
-Then use the CLI directly:
+启动后访问：http://127.0.0.1:3000/
 
-```bash
-luath-lua --version
-luath-lua --preset Medium ./your_file.lua
+自定义端口：`PORT=8080 node server/server.js`
+
+## API 说明
+
+### POST /api/obfuscate
+
+混淆 Lua 代码。
+
+**请求体**（JSON）：
+
+```json
+{
+  "code": "print('hello')",
+  "config": {
+    "stringEncrypt": true,
+    "varRename": true,
+    "varNameLength": 12,
+    "junkDensity": 5,
+    "strEncStrength": 2,
+    "varNameStyle": "long"
+  }
+}
 ```
 
-The release bundle includes a Lua runtime, so no separate Lua install is required for the packaged CLI.
+`config` 为可选字段，省略时使用引擎默认配置。所有混淆选项均可传入（与页面左侧面板一一对应）。
 
-To update to the latest release:
+**响应**（JSON）：
 
-```bash
-luath-lua update
+```json
+{
+  "code": "do if not(true)then ... end",
+  "elapsed": 12,
+  "overLimit": false,
+  "nearLimit": false,
+  "stats": {
+    "inputSize": 15,
+    "outputSize": 554,
+    "stringsEncrypted": 1,
+    "steps": ["注释已移除", "..."]
+  }
+}
 ```
 
-To uninstall:
-```bash
-rm -f ~/.local/bin/luath-lua && rm -rf ~/.local/share/luath-lua
-```
+- `code`：混淆后代码
+- `elapsed`：耗时（毫秒）
+- `overLimit` / `nearLimit`：输出是否超过/接近 1MB 上限
+- `stats`：混淆统计信息
 
-### Local source usage
+### GET /api/health
 
-```bash
-git clone https://github.com/luath-lua/Luath.git
-cd Luath
-lua cli.lua --preset Medium ./your_file.lua
-```
+健康检查：`{"status":"ok","engine":"Ninja Lua Obfuscator"}`
 
----
+## 前后端边界
 
-## Documentation
+| 职责 | 所在位置 |
+| --- | --- |
+| UI 渲染、预设、滑块调节、复制/下载/粘贴 | `public/index.html` |
+| 混淆算法（变量重命名、字符串加密、虚拟机、反调试套件等 36+ 功能） | `server/obfuscator.js` |
+| 混淆选项收集与请求发送 | `public/index.html`（`doObfuscate`） |
+| 参数校验、配置合并、混淆执行、结果返回 | `server/server.js` |
 
-You can find the full documentation, including the getting started guide, here:
-
-<p align="center">
-  <a href="https://luath-lua.github.io/Luath/docs/">
-    <img src="https://img.shields.io/badge/Documentation-Read%20the%20Docs-111111?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation" />
-  </a>
-</p>
-
-Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
-
----
-
-### Requirements
-
-Packaged CLI releases include a bundled Lua runtime.
-For source usage, Luath requires **LuaJIT** or **Lua 5.1+**.
-
-Lua 5.1 binaries can be downloaded here:  
-https://sourceforge.net/projects/luabinaries/files/5.1.5/Tools%20Executables/
-
----
-
-## Example
-
-### Input
-
-```lua
--- input.lua
-print("Hello, World!");
-```
-
-### Obfuscated output
-
-```lua
--- input.obfuscated.lua
-return(function(...)local L={"afT6mf1V","/7mJXsuvmE1c/fT3";"tn1ZSn6=","37ghSJM=";"WqermfWAWuuZpb3XX7M=","tqXGSJ3u","XQXpL9x21dxAWJa//p==","SrM=";"3q+5SJM=","/D==";"t7XUt0p=";"mIeOmIx9";"LdgrBfWdWuNABsb+KJxj","SJWJ4dahKsebW7t+KQv=","/cDu3AvP/D==";"Llv7uD==","tJWhFfTE";"TQ43ctIuy9HIop==","mEu93p==";"WJax1sXEXEaxWuxGt6==","t0gPSEp=",...
--- remaining obfuscated output omitted
-```
-
-For more advanced use cases, configuration, and presets, see the [documentation](https://luath-lua.github.io/Luath/docs/).
-
----
-
-## Tests
-
-The test suite runs inside Docker with lua5.1 and Luau:
-
-```bash
-./scripts/run-tests.sh           # Run all tests (default: 10 iterations)
-./scripts/run-tests.sh -b        # Build image and run tests
-./scripts/run-tests.sh -n 5      # Run with 5 iterations
-./scripts/run-tests.sh -c config.lua  # Use a custom config
-./scripts/run-tests.sh -v        # Verbose output
-```
-
----
-
-## Community
-
-Luath has an official Discord server:
-
-<p align="center">
-  <a href="https://discord.gg/U8h4d4Rf64">
-    <img src="https://img.shields.io/badge/Join%20the%20Discord%20Server-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Discord" />
-  </a>
-</p>
-
----
-
-## License and Commercial Use
-
-Luath is a reworked, rebranded fork of **Prometheus** (created by Elias Oelschner /
-levno-710, https://github.com/prometheus-lua/Prometheus). Luath derives from and
-modifies the Prometheus source under the terms of the original Prometheus license
-(see [LICENSE](LICENSE)).
-
-You are free to use, modify, and distribute this software, including for commercial purposes, under the following conditions:
-
-- Any commercial product, wrapper, or service *(including SaaS or hosted solutions)* that uses or integrates Luath must include clear attribution to:
-
-```text
-Based on Prometheus by Elias Oelschner, https://github.com/prometheus-lua/Prometheus
-```
-
-- The attribution must be visible in the product’s:
-  - UI
-  - documentation
-  - public website
-- The obfuscated output files generated by Luath do **not** need to include any license or copyright notice.
-- Derivative works and public forks must also include a statement in their README noting that they are based on Luath.
-
-Full license text: [Prometheus License](https://github.com/prometheus-lua/Prometheus/blob/master/LICENSE)
-
----
-
-<div align="center">
-
-<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&height=120&section=footer&color=gradient" />
-
-</div>
+引擎内部仅依赖 `Math.random` / `performance.now` / `console`，不含任何 DOM/浏览器 API，可独立于页面运行。
