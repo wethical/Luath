@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luath — Lua 5.1 Bytecode Interpreter</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --code-bg: #0a0e14;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 64px; }
+  header { padding-bottom: 32px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+  h1 { font-size: 2.4rem; letter-spacing: -0.5px; }
+  h1 .dot { color: var(--accent); }
+  .tagline { color: var(--muted); font-size: 1.15rem; margin-top: 8px; }
+  .badges { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 0.8rem;
+  }
+  .badge.green { color: var(--green); border-color: rgba(63,185,80,.4); }
+  h2 { font-size: 1.35rem; margin: 36px 0 14px; }
+  h3 { font-size: 1.05rem; margin: 20px 0 8px; }
+  p { margin-bottom: 12px; }
+  ul { padding-left: 22px; margin-bottom: 12px; }
+  li { margin-bottom: 6px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    margin-bottom: 16px;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  p code, td code, li code { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 0.85em; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .gh-btn {
+    display: inline-block;
+    margin-top: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 8px;
+  }
+  .gh-btn:hover { text-decoration: none; filter: brightness(1.1); }
+  footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+  .kbd { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Luath<span class="dot">.</span></h1>
+    <p class="tagline">A fast, dependency-free Lua 5.1 <strong>bytecode interpreter</strong>.</p>
+    <div class="badges">
+      <span class="badge green">Lua 5.1</span>
+      <span class="badge">Pure Lua</span>
+      <span class="badge">Zero Dependencies</span>
+      <span class="badge">GPL-3.0</span>
+    </div>
+  </header>
+
+  <p>Execute compiled Lua 5.1 bytecode in environments where <code>load</code> / <code>loadstring</code>
+  are unavailable or restricted — built for sandboxing, custom VMs, and reimplementing arbitrary execution.</p>
+
+  <a class="gh-btn" href="https://github.com/wethical/Luath" target="_blank" rel="noopener">View on GitHub →</a>
+
+  <h2>Features</h2>
+  <ul>
+    <li>Parses standard Lua 5.1 bytecode (<code>\27Lua</code> + <code>0x51</code> header), little / big endian, int / float / double number modes.</li>
+    <li>Executes bytecode without <code>load</code> / <code>loadstring</code> — a self-contained interpreter loop.</li>
+    <li>Works on Lua 5.1, LuaJIT (bit or bit32), Luau, and any host exposing <code>table.pack</code>/<code>unpack</code>/<code>move</code>/<code>create</code>.</li>
+    <li>No external dependencies; pure Lua.</li>
+    <li>One-shot API: <code>luath.load(bc, env)</code>.</li>
+  </ul>
+
+  <h2>Usage</h2>
+<pre><code><span class="kbd">local</span> luath = require('luath')
+<span class="kbd">local</span> env = getfenv(0)
+
+-- one-shot: bytecode -&gt; callable
+<span class="kbd">local</span> fn = luath.load(string.dump(<span class="kbd">function</span>(a, b) <span class="kbd">return</span> a + b <span class="kbd">end</span>), env)
+
+print(fn(2, 3)) -- 5
+
+-- manual two-step (parse once, wrap many)
+<span class="kbd">local</span> state = luath.read(string.dump(<span class="kbd">function</span>() <span class="kbd">return</span> 'hi' <span class="kbd">end</span>))
+<span class="kbd">local</span> wrapped = luath.wrap(state, env)
+print(wrapped()) -- hi</code></pre>
+
+  <h2>API</h2>
+  <table>
+    <thead><tr><th>Member</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>luath.read(bc)</code></td><td>Parse a Lua 5.1 bytecode string into a proto state.</td></tr>
+      <tr><td><code>luath.wrap(state, env)</code></td><td>Turn a proto state into a callable Lua function.</td></tr>
+      <tr><td><code>luath.load(bc, env)</code></td><td><code>read</code> + <code>wrap</code> in one step.</td></tr>
+      <tr><td><code>luath.bc_to_state</code></td><td>Legacy alias of <code>read</code> (FiOne-compatible).</td></tr>
+      <tr><td><code>luath.wrap_state</code></td><td>Legacy alias of <code>wrap</code> (FiOne-compatible).</td></tr>
+      <tr><td><code>luath.version</code></td><td>Version string.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Layout</h2>
+  <ul>
+    <li><code>luath.lua</code> — the interpreter (single file).</li>
+    <li><code>example.lua</code> — runnable usage example (<code>lua example.lua</code>).</li>
+    <li><code>gen/luath_gen_template.lua</code> — per-opcode snippet templates.</li>
+    <li><code>gen/luath_gen_search.lua</code> — regenerates the binary-search dispatch tree.</li>
+    <li><code>tests/run_tests.lua</code> — end-to-end tests comparing native vs interpreted execution.</li>
+  </ul>
+
+  <h2>License</h2>
+  <p>GPL-3.0. Luath is a reworked, rebranded fork of
+  <a href="https://github.com/SovereignSatellite/FiOne" target="_blank" rel="noopener">FiOne</a> (GPL-3.0).</p>
+
+  <footer>
+    Luath — reworked fork of FiOne (Copyright &copy; 2021 Rerumu).
+    Luath modifications Copyright &copy; 2026 Luath contributors. Hosted on <a href="https://vercel.com" target="_blank" rel="noopener">Vercel</a>.
+  </footer>
+</div>
+</body>
+</html>
