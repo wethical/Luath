@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Luath — Lua 5.1 Bytecode Interpreter</title>
+<title>Luath — Lua Obfuscator</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -109,17 +109,21 @@
 <div class="wrap">
   <header>
     <h1>Luath<span class="dot">.</span></h1>
-    <p class="tagline">A fast, dependency-free Lua 5.1 <strong>bytecode interpreter</strong>.</p>
+    <p class="tagline">A pure-Lua, AST-based <strong>Lua obfuscator</strong> — control-flow, encryption &amp; anti-tamper.</p>
     <div class="badges">
       <span class="badge green">Lua 5.1</span>
+      <span class="badge">LuaU</span>
       <span class="badge">Pure Lua</span>
       <span class="badge">Zero Dependencies</span>
-      <span class="badge">GPL-3.0</span>
+      <span class="badge">Prometheus License</span>
     </div>
   </header>
 
-  <p>Execute compiled Lua 5.1 bytecode in environments where <code>load</code> / <code>loadstring</code>
-  are unavailable or restricted — built for sandboxing, custom VMs, and reimplementing arbitrary execution.</p>
+  <p><strong>Luath</strong> is a Lua obfuscator written in pure Lua — a reworked, rebranded
+  fork of <a href="https://github.com/prometheus-lua/Prometheus" target="_blank" rel="noopener">Prometheus</a>.
+  It applies AST-based transformations to make source code significantly harder to read,
+  analyze, and reverse engineer: control-flow obfuscation, constant encryption, string
+  splitting, local proxying, anti-tamper and more.</p>
 
   <a class="gh-btn" href="https://github.com/wethical/Luath" target="_blank" rel="noopener">View on GitHub →</a>
 
@@ -144,55 +148,53 @@
 
   <h2>Features</h2>
   <ul>
-    <li>Parses standard Lua 5.1 bytecode (<code>\27Lua</code> + <code>0x51</code> header), little / big endian, int / float / double number modes.</li>
-    <li>Executes bytecode without <code>load</code> / <code>loadstring</code> — a self-contained interpreter loop.</li>
-    <li>Works on Lua 5.1, LuaJIT (bit or bit32), Luau, and any host exposing <code>table.pack</code>/<code>unpack</code>/<code>move</code>/<code>create</code>.</li>
-    <li>No external dependencies; pure Lua.</li>
-    <li>One-shot API: <code>luath.load(bc, env)</code>.</li>
+    <li><strong>Control-flow obfuscation</strong> — wraps code, flattens logic and adds decoy branches.</li>
+    <li><strong>Constant encryption</strong> — numeric constants turned into runtime expressions; string splitting &amp; encoding.</li>
+    <li><strong>Identifier renaming</strong> — mangled variable names via pluggable name generators.</li>
+    <li><strong>Local proxying</strong> (<code>ProxifyLocals</code>), <strong>anti-tamper</strong> and <strong>watermark</strong> steps.</li>
+    <li><strong>Presets</strong> — Weak / Medium / Strong / Minify / Vmify, or a fully custom pipeline config.</li>
+    <li>Pure Lua 5.1; supports LuaU targets; no dependencies; CLI, library &amp; web use.</li>
   </ul>
 
   <h2>Usage</h2>
-<pre><code><span class="kbd">local</span> luath = require('luath')
-<span class="kbd">local</span> env = getfenv(0)
+<pre><code><span class="kbd">local</span> Luath = require('src.luath')
+<span class="kbd">local</span> Presets = require('src.presets')
 
--- one-shot: bytecode -&gt; callable
-<span class="kbd">local</span> fn = luath.load(string.dump(<span class="kbd">function</span>(a, b) <span class="kbd">return</span> a + b <span class="kbd">end</span>), env)
+-- build a pipeline from a preset and obfuscate
+<span class="kbd">local</span> pipeline = Luath.Pipeline:fromConfig(Presets.Medium)
+<span class="kbd">local</span> obfuscated = pipeline:apply(source)
 
-print(fn(2, 3)) -- 5
+-- or straight from the CLI:
+--   lua cli.lua --preset Medium ./your_file.lua</code></pre>
 
--- manual two-step (parse once, wrap many)
-<span class="kbd">local</span> state = luath.read(string.dump(<span class="kbd">function</span>() <span class="kbd">return</span> 'hi' <span class="kbd">end</span>))
-<span class="kbd">local</span> wrapped = luath.wrap(state, env)
-print(wrapped()) -- hi</code></pre>
-
-  <h2>API</h2>
+  <h2>CLI</h2>
   <table>
-    <thead><tr><th>Member</th><th>Description</th></tr></thead>
+    <thead><tr><th>Command</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td><code>luath.read(bc)</code></td><td>Parse a Lua 5.1 bytecode string into a proto state.</td></tr>
-      <tr><td><code>luath.wrap(state, env)</code></td><td>Turn a proto state into a callable Lua function.</td></tr>
-      <tr><td><code>luath.load(bc, env)</code></td><td><code>read</code> + <code>wrap</code> in one step.</td></tr>
-      <tr><td><code>luath.bc_to_state</code></td><td>Legacy alias of <code>read</code> (FiOne-compatible).</td></tr>
-      <tr><td><code>luath.wrap_state</code></td><td>Legacy alias of <code>wrap</code> (FiOne-compatible).</td></tr>
-      <tr><td><code>luath.version</code></td><td>Version string.</td></tr>
+      <tr><td><code>lua cli.lua --preset Medium in.lua</code></td><td>Obfuscate a file with a built-in preset (Weak/Medium/Strong/Minify/Vmify).</td></tr>
+      <tr><td><code>lua cli.lua --config cfg.lua in.lua</code></td><td>Use a custom pipeline config.</td></tr>
+      <tr><td><code>lua cli.lua --out out.lua in.lua</code></td><td>Write output to a specific path.</td></tr>
+      <tr><td><code>luath-lua update</code></td><td>Install the latest release (packaged CLI).</td></tr>
     </tbody>
   </table>
 
   <h2>Layout</h2>
   <ul>
-    <li><code>luath.lua</code> — the interpreter (single file).</li>
-    <li><code>example.lua</code> — runnable usage example (<code>lua example.lua</code>).</li>
-    <li><code>gen/luath_gen_template.lua</code> — per-opcode snippet templates.</li>
-    <li><code>gen/luath_gen_search.lua</code> — regenerates the binary-search dispatch tree.</li>
-    <li><code>tests/run_tests.lua</code> — end-to-end tests comparing native vs interpreted execution.</li>
+    <li><code>src/luath/</code> — parser, tokenizer, AST, compiler &amp; obfuscation steps (pure Lua).</li>
+    <li><code>cli.lua</code> — command-line entry point; <code>src/cli.lua</code> implements the CLI.</li>
+    <li><code>src/presets.lua</code> — built-in obfuscation presets.</li>
+    <li><code>tests/</code> — end-to-end tests running every preset on Lua 5.1 &amp; LuaU.</li>
+    <li><code>web/</code> — optional React playground front-end.</li>
+    <li><code>doc/</code> — full documentation (GitBook).</li>
   </ul>
 
   <h2>License</h2>
-  <p>GPL-3.0. Luath is a reworked, rebranded fork of
-  <a href="https://github.com/SovereignSatellite/FiOne" target="_blank" rel="noopener">FiOne</a> (GPL-3.0).</p>
+  <p>Prometheus License. Luath is a reworked, rebranded fork of
+  <a href="https://github.com/prometheus-lua/Prometheus" target="_blank" rel="noopener">Prometheus</a>
+  by Elias Oelschner, distributed under its original license terms.</p>
 
   <footer>
-    Luath — reworked fork of FiOne (Copyright &copy; 2021 Rerumu).
+    Luath — reworked fork of Prometheus (Copyright &copy; 2025 Elias Oelschner).
     Luath modifications Copyright &copy; 2026 Luath contributors. Hosted on <a href="https://vercel.com" target="_blank" rel="noopener">Vercel</a>.
   </footer>
 </div>
