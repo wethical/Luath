@@ -339,7 +339,7 @@ print(wrapped()) -- hi</code></pre>
   function decodeShortStrBytes(body) {
     var out = [];
     var i = 0, n = body.length;
-    var enc = new TextEncoder();
+    var enc = _tEnc();
     while (i < n) {
       var c = body[i];
       if (c === '\\') {
@@ -378,7 +378,7 @@ print(wrapped()) -- hi</code></pre>
   function strTokenToBytes(tok) {
     if (tok.long) {
       var bytes = [];
-      var enc = new TextEncoder();
+      var enc = _tEnc();
       for (var i = 0; i < tok.content.length; i++) {
         var cp = tok.content.codePointAt(i);
         if (cp <= 0x7f) { bytes.push(cp); continue; }
@@ -403,6 +403,61 @@ print(wrapped()) -- hi</code></pre>
       }
     }
     return s + '"';
+  }
+
+  // TextEncoder polyfill for very old browsers / WebViews without it.
+  var _textEncoder;
+  function _tEnc() {
+    if (_textEncoder !== undefined) return _textEncoder;
+    if (typeof TextEncoder !== 'undefined') {
+      _textEncoder = new TextEncoder();
+      return _textEncoder;
+    }
+    // Manual UTF-8 encoder (bytes are plain numbers, matching TextEncoder.encode).
+    _textEncoder = {
+      encode: function (s) {
+        var out = [];
+        for (var i = 0; i < s.length; i++) {
+          var cp = s.codePointAt(i);
+          var ch = String.fromCodePoint(cp);
+          i += ch.length - 1;
+          if (cp < 0x80) {
+            out.push(cp);
+          } else if (cp < 0x800) {
+            out.push(0xC0 | (cp >> 6), 0x80 | (cp & 0x3F));
+          } else if (cp < 0x10000) {
+            out.push(0xE0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3F), 0x80 | (cp & 0x3F));
+          } else {
+            out.push(0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3F), 0x80 | ((cp >> 6) & 0x3F), 0x80 | (cp & 0x3F));
+          }
+        }
+        return out;
+      }
+    };
+    return _textEncoder;
+  }
+
+  // Convert a decimal string (arbitrary length) to lowercase hex WITHOUT BigInt,
+  // so the page keeps working on browsers that lack ES2020 BigInt.
+  function decStrToHex(str) {
+    // repeated division by 16 over decimal digits
+    var digits = [];
+    for (var i = 0; i < str.length; i++) digits.push(str.charCodeAt(i) - 48);
+    if (digits.length === 1 && digits[0] === 0) return '0';
+    var hex = '';
+    while (digits.length > 1 || digits[0] !== 0) {
+      var rem = 0;
+      var next = [];
+      for (var j = 0; j < digits.length; j++) {
+        var cur = rem * 10 + digits[j];
+        var q = Math.floor(cur / 16);
+        rem = cur % 16;
+        if (next.length > 0 || q > 0) next.push(q);
+      }
+      hex = '0123456789abcdef'.charAt(rem) + hex;
+      digits = next.length ? next : [0];
+    }
+    return hex;
   }
 
   /* --- identifier renaming --------------------------------------------- */
@@ -527,7 +582,7 @@ print(wrapped()) -- hi</code></pre>
         piece = strings ? escapeBytes(bytes) : tok.v.raw;
       } else if (tok.t === 'num') {
         if (hex && /^(0|[1-9][0-9]*)$/.test(tok.v)) {
-          piece = '0x' + BigInt(tok.v).toString(16);
+          piece = '0x' + decStrToHex(tok.v);
         } else {
           piece = tok.v;
         }
